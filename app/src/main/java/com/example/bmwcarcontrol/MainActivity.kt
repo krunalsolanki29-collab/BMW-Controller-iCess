@@ -134,7 +134,6 @@ class MainActivity : AppCompatActivity() {
         statusText.text = "Connecting to ${device.name}..."
         ioExecutor.execute {
             try {
-                bluetoothAdapter?.cancelDiscovery()
                 val sock = device.createRfcommSocketToServiceRecord(sppUuid)
                 sock.connect()
                 socket = sock
