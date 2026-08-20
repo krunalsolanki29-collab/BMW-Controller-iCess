@@ -11,6 +11,14 @@
         android:layout_height="wrap_content"
         android:text="Not connected"
         android:textSize="16sp"
+        android:paddingBottom="4dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Car: BMW X6 (fixed)"
+        android:textSize="13sp"
+        android:alpha="0.7"
         android:paddingBottom="8dp" />
 
     <Spinner
@@ -38,6 +46,28 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Connect" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <Button
+            android:id="@+id/startButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Start" />
+
+        <Button
+            android:id="@+id/stopButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Stop" />
     </LinearLayout>
 
     <Button
