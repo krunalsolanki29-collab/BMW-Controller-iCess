@@ -42,11 +42,25 @@ class MainActivity : AppCompatActivity() {
     private val sendIntervalMs = 100L
     private val drivePower = 200
 
+    private var isStreaming = false
+
     private val sendRunnable = object : Runnable {
         override fun run() {
+            if (!isStreaming) return
             sendPacket()
             sendHandler.postDelayed(this, sendIntervalMs)
         }
+    }
+
+    private fun startStreaming() {
+        if (isStreaming) return
+        isStreaming = true
+        sendHandler.post(sendRunnable)
+    }
+
+    private fun stopStreaming() {
+        isStreaming = false
+        sendHandler.removeCallbacks(sendRunnable)
     }
 
     private val requestPermissionLauncher =
@@ -138,7 +152,10 @@ class MainActivity : AppCompatActivity() {
                 sock.connect()
                 socket = sock
                 outputStream = sock.outputStream
-                runOnUiThread { statusText.text = "Connected to ${device.name}" }
+                runOnUiThread {
+                    statusText.text = "Connected to ${device.name}"
+                    startStreaming()
+                }
             } catch (e: Exception) {
                 socket = null
                 outputStream = null
@@ -163,15 +180,11 @@ class MainActivity : AppCompatActivity() {
     private fun startDriving(pitchFlag: Int, yawFlag: Int) {
         currentPitchFlag = pitchFlag
         currentYawFlag = yawFlag
-        sendHandler.removeCallbacks(sendRunnable)
-        sendHandler.post(sendRunnable)
     }
 
     private fun stopDriving() {
         currentPitchFlag = 0
         currentYawFlag = 0
-        sendHandler.removeCallbacks(sendRunnable)
-        sendPacket()
     }
 
     private fun sendPacket() {
@@ -215,7 +228,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        sendHandler.removeCallbacks(sendRunnable)
+        stopStreaming()
         ioExecutor.execute {
             try {
                 outputStream?.flush()
