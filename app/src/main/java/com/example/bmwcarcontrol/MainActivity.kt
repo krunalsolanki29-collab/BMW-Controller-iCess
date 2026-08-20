@@ -40,7 +40,7 @@ class MainActivity : AppCompatActivity() {
     private var currentYawFlag = 0
     private var lightsOn = false
     private val sendIntervalMs = 100L
-    private val drivePower = 200
+    private val drivePower = 255
 
     private val defaultTrimer = 50
 
