@@ -1,317 +1,263 @@
-package com.example.bmwcarcontrol
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/app_background">
 
-import android.Manifest
-import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothSocket
-import android.widget.SeekBar
-import android.content.pm.PackageManager
-import android.os.Build
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.view.MotionEvent
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.Spinner
-import android.widget.TextView
-import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
-import java.io.OutputStream
-import java.util.UUID
-import java.util.concurrent.Executors
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
 
-class MainActivity : AppCompatActivity() {
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Not connected"
+        android:textColor="@color/text_on_color"
+        android:textSize="16sp"
+        android:paddingBottom="4dp" />
 
-    private val sppUuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
-    private val bluetoothAdapter: BluetoothAdapter? by lazy { BluetoothAdapter.getDefaultAdapter() }
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Car: BMW X6 (fixed)"
+        android:textColor="@color/text_on_color"
+        android:textSize="13sp"
+        android:alpha="0.6"
+        android:paddingBottom="8dp" />
 
-    private var socket: BluetoothSocket? = null
-    private var outputStream: OutputStream? = null
-    private val ioExecutor = Executors.newSingleThreadExecutor()
+    <Spinner
+        android:id="@+id/deviceSpinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/card_surface"
+        android:padding="8dp" />
 
-    private lateinit var statusText: TextView
-    private lateinit var deviceSpinner: Spinner
-    private var pairedDevices: List<BluetoothDevice> = emptyList()
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="12dp"
+        android:paddingBottom="16dp">
 
-    private val sendHandler = Handler(Looper.getMainLooper())
-    private var currentPitchFlag = 0
-    private var currentYawFlag = 0
-    private var allLightsOn = false
-    private val sendIntervalMs = 100L
-    private val drivePower = 255
+        <Button
+            android:id="@+id/refreshButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:backgroundTint="@color/neutral_grey"
+            android:textColor="@color/text_on_color"
+            android:textStyle="bold"
+            android:text="Refresh Paired" />
 
-    private var manualModeActive = false
-    private var manualPitchFlag = 0
-    private var manualPitchMag = 0
-    private var manualYawFlag = 0
-    private var manualYawMag = 0
-    private var manualTrim = 0
-    private lateinit var packetPreview: TextView
+        <Button
+            android:id="@+id/connectButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:backgroundTint="@color/accent_blue"
+            android:textColor="@color/text_on_color"
+            android:textStyle="bold"
+            android:text="Connect" />
+    </LinearLayout>
 
-    private val defaultTrimer = 50
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingBottom="16dp">
 
-    private var isStreaming = false
+        <Button
+            android:id="@+id/startButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:backgroundTint="@color/drive_green_dark"
+            android:textColor="@color/text_on_color"
+            android:textStyle="bold"
+            android:text="Start" />
 
-    private val sendRunnable = object : Runnable {
-        override fun run() {
-            if (!isStreaming) return
-            sendPacket()
-            sendHandler.postDelayed(this, sendIntervalMs)
-        }
-    }
+        <Button
+            android:id="@+id/stopButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:backgroundTint="@color/drive_red_dark"
+            android:textColor="@color/text_on_color"
+            android:textStyle="bold"
+            android:text="Stop" />
+    </LinearLayout>
 
-    private fun startStreaming() {
-        if (isStreaming) return
-        isStreaming = true
-        sendHandler.post(sendRunnable)
-    }
+    <Button
+        android:id="@+id/btnForward"
+        android:layout_width="match_parent"
+        android:layout_height="84dp"
+        android:layout_marginBottom="8dp"
+        android:backgroundTint="@color/drive_green"
+        android:textColor="@color/text_on_color"
+        android:textStyle="bold"
+        android:textSize="18sp"
+        android:text="▲ FORWARD" />
 
-    private fun stopStreaming() {
-        isStreaming = false
-        sendHandler.removeCallbacks(sendRunnable)
-    }
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="84dp"
+        android:orientation="horizontal">
 
-    private val requestPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
-            if (grants.values.all { it }) {
-                loadPairedDevices()
-            } else {
-                Toast.makeText(
-                    this,
-                    "Bluetooth permission is required to list paired devices",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
+        <Button
+            android:id="@+id/btnLeft"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="@color/steer_purple"
+            android:textColor="@color/text_on_color"
+            android:textStyle="bold"
+            android:text="◀ LEFT" />
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        <Button
+            android:id="@+id/btnStop"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="4dp"
+            android:backgroundTint="@color/stop_orange"
+            android:textColor="@color/text_on_color"
+            android:textStyle="bold"
+            android:text="STOP" />
 
-        statusText = findViewById(R.id.statusText)
-        deviceSpinner = findViewById(R.id.deviceSpinner)
+        <Button
+            android:id="@+id/btnRight"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="@color/steer_purple"
+            android:textColor="@color/text_on_color"
+            android:textStyle="bold"
+            android:text="RIGHT ▶" />
+    </LinearLayout>
 
-        findViewById<Button>(R.id.refreshButton).setOnClickListener { ensurePermissionsThenLoad() }
-        findViewById<Button>(R.id.connectButton).setOnClickListener { connectToSelected() }
+    <Button
+        android:id="@+id/btnBackward"
+        android:layout_width="match_parent"
+        android:layout_height="84dp"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="@color/drive_red"
+        android:textColor="@color/text_on_color"
+        android:textStyle="bold"
+        android:textSize="18sp"
+        android:text="▼ BACKWARD" />
 
-        findViewById<Button>(R.id.startButton).setOnClickListener {
-            currentPitchFlag = 0
-            currentYawFlag = 0
-            allLightsOn = false
-            startStreaming()
-            statusText.text = "Streaming started"
-        }
+    <Button
+        android:id="@+id/btnLights"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:layout_marginTop="20dp"
+        android:backgroundTint="@color/lights_amber"
+        android:textColor="@color/text_dark"
+        android:textStyle="bold"
+        android:text="TOGGLE ALL 4 LIGHTS" />
 
-        findViewById<Button>(R.id.stopButton).setOnClickListener {
-            stopStreaming()
-            statusText.text = "Streaming stopped"
-        }
+    <!-- ===================== MANUAL TEST PANEL ===================== -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="28dp"
+        android:text="Manual Test Panel (raw packet fields)"
+        android:textColor="@color/text_on_color"
+        android:textStyle="bold"
+        android:textSize="15sp" />
 
-        setupHoldButton(R.id.btnForward, pitchFlag = 1, yawFlag = 0)
-        setupHoldButton(R.id.btnBackward, pitchFlag = 2, yawFlag = 0)
-        setupHoldButton(R.id.btnLeft, pitchFlag = 0, yawFlag = 1)
-        setupHoldButton(R.id.btnRight, pitchFlag = 0, yawFlag = 2)
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="Move sliders to send raw values live. Watch/listen to the car and note what each does."
+        android:textColor="@color/text_on_color"
+        android:alpha="0.6"
+        android:textSize="12sp" />
 
-        findViewById<Button>(R.id.btnStop).setOnClickListener { stopDriving() }
+    <TextView
+        android:id="@+id/pitchFlagLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Pitch flag: 0"
+        android:textColor="@color/text_on_color" />
+    <SeekBar
+        android:id="@+id/pitchFlagSeek"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="3" />
 
-        findViewById<Button>(R.id.btnLights).setOnClickListener {
-            allLightsOn = !allLightsOn
-            sendPacket()
-            Toast.makeText(this, if (allLightsOn) "All 4 lights: ON" else "Lights: default", Toast.LENGTH_SHORT).show()
-        }
+    <TextView
+        android:id="@+id/pitchMagLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Pitch magnitude: 0"
+        android:textColor="@color/text_on_color" />
+    <SeekBar
+        android:id="@+id/pitchMagSeek"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="255" />
 
-        packetPreview = findViewById(R.id.packetPreview)
-        setupManualSlider(R.id.pitchFlagSeek, R.id.pitchFlagLabel, "Pitch flag") { manualPitchFlag = it }
-        setupManualSlider(R.id.pitchMagSeek, R.id.pitchMagLabel, "Pitch magnitude") { manualPitchMag = it }
-        setupManualSlider(R.id.yawFlagSeek, R.id.yawFlagLabel, "Yaw flag") { manualYawFlag = it }
-        setupManualSlider(R.id.yawMagSeek, R.id.yawMagLabel, "Yaw magnitude") { manualYawMag = it }
-        setupManualSlider(R.id.trimSeek, R.id.trimLabel, "Trim/light nibble") { manualTrim = it }
+    <TextView
+        android:id="@+id/yawFlagLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Yaw flag: 0"
+        android:textColor="@color/text_on_color" />
+    <SeekBar
+        android:id="@+id/yawFlagSeek"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="3" />
 
-        ensurePermissionsThenLoad()
-    }
+    <TextView
+        android:id="@+id/yawMagLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Yaw magnitude: 0"
+        android:textColor="@color/text_on_color" />
+    <SeekBar
+        android:id="@+id/yawMagSeek"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="255" />
 
-    private fun setupManualSlider(seekId: Int, labelId: Int, labelText: String, onChange: (Int) -> Unit) {
-        val seek = findViewById<SeekBar>(seekId)
-        val label = findViewById<TextView>(labelId)
-        seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
-                label.text = "$labelText: $progress"
-                if (fromUser) {
-                    manualModeActive = true
-                    onChange(progress)
-                    sendPacket()
-                }
-            }
-            override fun onStartTrackingTouch(bar: SeekBar?) {}
-            override fun onStopTrackingTouch(bar: SeekBar?) {}
-        })
-    }
+    <TextView
+        android:id="@+id/trimLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Trim/light nibble: 0"
+        android:textColor="@color/text_on_color" />
+    <SeekBar
+        android:id="@+id/trimSeek"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="15" />
 
-    private fun ensurePermissionsThenLoad() {
-        if (bluetoothAdapter == null) {
-            statusText.text = "This device has no Bluetooth adapter"
-            return
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val needed = arrayOf(Manifest.permission.BLUETOOTH_CONNECT)
-            val notGranted = needed.filter {
-                checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
-            }
-            if (notGranted.isNotEmpty()) {
-                requestPermissionLauncher.launch(notGranted.toTypedArray())
-                return
-            }
-        }
-        loadPairedDevices()
-    }
+    <TextView
+        android:id="@+id/packetPreview"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="24dp"
+        android:text="Packet: (not sent yet)"
+        android:textColor="@color/lights_amber"
+        android:textSize="13sp"
+        android:fontFamily="monospace" />
 
-    @SuppressLint("MissingPermission")
-    private fun loadPairedDevices() {
-        val adapter = bluetoothAdapter ?: return
-        if (!adapter.isEnabled) {
-            statusText.text = "Please turn on Bluetooth and pair the car first"
-            return
-        }
-        pairedDevices = adapter.bondedDevices.toList()
-        val names = pairedDevices.map { "${it.name} (${it.address})" }
-        if (names.isEmpty()) {
-            statusText.text = "No paired devices found. Pair the car in Android Bluetooth settings first (PIN usually 0000)."
-        } else {
-            statusText.text = "Select the car below, then tap Connect"
-        }
-        deviceSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun connectToSelected() {
-        val position = deviceSpinner.selectedItemPosition
-        if (position < 0 || position >= pairedDevices.size) {
-            Toast.makeText(this, "Pick a paired device first", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val device = pairedDevices[position]
-        statusText.text = "Connecting to ${device.name}..."
-        ioExecutor.execute {
-            try {
-                var sock: BluetoothSocket
-                try {
-                    sock = device.createRfcommSocketToServiceRecord(sppUuid)
-                    sock.connect()
-                } catch (sdpFailure: Exception) {
-                    val fallbackSock = device.javaClass
-                        .getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-                        .invoke(device, 1) as BluetoothSocket
-                    fallbackSock.connect()
-                    sock = fallbackSock
-                }
-                socket = sock
-                outputStream = sock.outputStream
-                runOnUiThread {
-                    statusText.text = "Connected to ${device.name}"
-                    startStreaming()
-                }
-            } catch (e: Exception) {
-                socket = null
-                outputStream = null
-                runOnUiThread {
-                    statusText.text = "Connection failed: ${e.message}"
-                }
-            }
-        }
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupHoldButton(viewId: Int, pitchFlag: Int, yawFlag: Int) {
-        findViewById<Button>(viewId).setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> startDriving(pitchFlag, yawFlag)
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stopDriving()
-            }
-            false
-        }
-    }
-
-    private fun startDriving(pitchFlag: Int, yawFlag: Int) {
-        manualModeActive = false
-        currentPitchFlag = pitchFlag
-        currentYawFlag = yawFlag
-    }
-
-    private fun stopDriving() {
-        manualModeActive = false
-        currentPitchFlag = 0
-        currentYawFlag = 0
-    }
-
-    private fun sendPacket() {
-        val stream = outputStream ?: return
-
-        val packet = if (manualModeActive) {
-            buildPacket(
-                pitchFlag = manualPitchFlag,
-                pitch = manualPitchMag,
-                yawFlag = manualYawFlag,
-                yaw = manualYawMag,
-                trimer = manualTrim
-            )
-        } else {
-            val trimer = if (allLightsOn) 15 else defaultTrimer
-            buildPacket(
-                pitchFlag = currentPitchFlag,
-                pitch = if (currentPitchFlag != 0) drivePower else 0,
-                yawFlag = currentYawFlag,
-                yaw = if (currentYawFlag != 0) drivePower else 0,
-                trimer = trimer
-            )
-        }
-
-        runOnUiThread {
-            packetPreview.text = "Packet: " + packet.toString(Charsets.US_ASCII)
-        }
-
-        ioExecutor.execute {
-            try {
-                stream.write(packet)
-                stream.flush()
-            } catch (e: Exception) {
-                runOnUiThread { statusText.text = "Lost connection: ${e.message}" }
-                outputStream = null
-            }
-        }
-    }
-
-    private fun buildPacket(pitchFlag: Int, pitch: Int, yawFlag: Int, yaw: Int, trimer: Int): ByteArray {
-        val pClamped = pitch.coerceIn(0, 255)
-        val yClamped = yaw.coerceIn(0, 255)
-        val trimClamped = trimer.coerceIn(0, 255)
-
-        val flagByte = (yawFlag and 0x3) or ((pitchFlag and 0x3) shl 2)
-        val trimerByte = (trimClamped shl 4) and 0xFF
-        val checkNum = (pClamped + yClamped + 1 + trimClamped) and 0xFF
-
-        val wireOrder = intArrayOf(flagByte, yClamped, pClamped, trimerByte, checkNum)
-
-        val sb = StringBuilder("0p")
-        for (b in wireOrder) {
-            sb.append(String.format("%02x", b and 0xFF))
-        }
-        return sb.toString().toByteArray(Charsets.US_ASCII)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        stopStreaming()
-        ioExecutor.execute {
-            try {
-                outputStream?.flush()
-                outputStream?.close()
-                socket?.close()
-            } catch (_: Exception) {
-            }
-        }
-        ioExecutor.shutdown()
-    }
-}
+</LinearLayout>
+</ScrollView>
