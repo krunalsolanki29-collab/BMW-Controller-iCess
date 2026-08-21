@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.widget.SeekBar
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -41,6 +42,14 @@ class MainActivity : AppCompatActivity() {
     private var allLightsOn = false
     private val sendIntervalMs = 100L
     private val drivePower = 255
+
+    private var manualModeActive = false
+    private var manualPitchFlag = 0
+    private var manualPitchMag = 0
+    private var manualYawFlag = 0
+    private var manualYawMag = 0
+    private var manualTrim = 0
+    private lateinit var packetPreview: TextView
 
     private val defaultTrimer = 50
 
@@ -114,7 +123,31 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, if (allLightsOn) "All 4 lights: ON" else "Lights: default", Toast.LENGTH_SHORT).show()
         }
 
+        packetPreview = findViewById(R.id.packetPreview)
+        setupManualSlider(R.id.pitchFlagSeek, R.id.pitchFlagLabel, "Pitch flag") { manualPitchFlag = it }
+        setupManualSlider(R.id.pitchMagSeek, R.id.pitchMagLabel, "Pitch magnitude") { manualPitchMag = it }
+        setupManualSlider(R.id.yawFlagSeek, R.id.yawFlagLabel, "Yaw flag") { manualYawFlag = it }
+        setupManualSlider(R.id.yawMagSeek, R.id.yawMagLabel, "Yaw magnitude") { manualYawMag = it }
+        setupManualSlider(R.id.trimSeek, R.id.trimLabel, "Trim/light nibble") { manualTrim = it }
+
         ensurePermissionsThenLoad()
+    }
+
+    private fun setupManualSlider(seekId: Int, labelId: Int, labelText: String, onChange: (Int) -> Unit) {
+        val seek = findViewById<SeekBar>(seekId)
+        val label = findViewById<TextView>(labelId)
+        seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                label.text = "$labelText: $progress"
+                if (fromUser) {
+                    manualModeActive = true
+                    onChange(progress)
+                    sendPacket()
+                }
+            }
+            override fun onStartTrackingTouch(bar: SeekBar?) {}
+            override fun onStopTrackingTouch(bar: SeekBar?) {}
+        })
     }
 
     private fun ensurePermissionsThenLoad() {
@@ -202,32 +235,43 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startDriving(pitchFlag: Int, yawFlag: Int) {
+        manualModeActive = false
         currentPitchFlag = pitchFlag
         currentYawFlag = yawFlag
     }
 
     private fun stopDriving() {
+        manualModeActive = false
         currentPitchFlag = 0
         currentYawFlag = 0
     }
 
     private fun sendPacket() {
         val stream = outputStream ?: return
-        val trimer = if (allLightsOn) 15 else defaultTrimer
 
-        val yawMagnitude = when {
-            currentYawFlag != 0 -> drivePower
-            currentPitchFlag != 0 -> drivePower
-            else -> 0
+        val packet = if (manualModeActive) {
+            buildPacket(
+                pitchFlag = manualPitchFlag,
+                pitch = manualPitchMag,
+                yawFlag = manualYawFlag,
+                yaw = manualYawMag,
+                trimer = manualTrim
+            )
+        } else {
+            val trimer = if (allLightsOn) 15 else defaultTrimer
+            buildPacket(
+                pitchFlag = currentPitchFlag,
+                pitch = if (currentPitchFlag != 0) drivePower else 0,
+                yawFlag = currentYawFlag,
+                yaw = if (currentYawFlag != 0) drivePower else 0,
+                trimer = trimer
+            )
         }
 
-        val packet = buildPacket(
-            pitchFlag = currentPitchFlag,
-            pitch = if (currentPitchFlag != 0) drivePower else 0,
-            yawFlag = currentYawFlag,
-            yaw = yawMagnitude,
-            trimer = trimer
-        )
+        runOnUiThread {
+            packetPreview.text = "Packet: " + packet.toString(Charsets.US_ASCII)
+        }
+
         ioExecutor.execute {
             try {
                 stream.write(packet)
