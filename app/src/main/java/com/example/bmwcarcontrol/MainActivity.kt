@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
     private val sendHandler = Handler(Looper.getMainLooper())
     private var currentPitchFlag = 0
     private var currentYawFlag = 0
-    private var lightsOn = false
+    private var allLightsOn = false
     private val sendIntervalMs = 100L
     private val drivePower = 255
 
@@ -91,7 +91,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.startButton).setOnClickListener {
             currentPitchFlag = 0
             currentYawFlag = 0
-            lightsOn = false
+            allLightsOn = false
             startStreaming()
             statusText.text = "Streaming started"
         }
@@ -109,9 +109,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnStop).setOnClickListener { stopDriving() }
 
         findViewById<Button>(R.id.btnLights).setOnClickListener {
-            lightsOn = !lightsOn
+            allLightsOn = !allLightsOn
             sendPacket()
-            Toast.makeText(this, if (lightsOn) "Trim: high" else "Trim: default (50)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, if (allLightsOn) "All 4 lights: ON" else "Lights: default", Toast.LENGTH_SHORT).show()
         }
 
         ensurePermissionsThenLoad()
@@ -163,8 +163,17 @@ class MainActivity : AppCompatActivity() {
         statusText.text = "Connecting to ${device.name}..."
         ioExecutor.execute {
             try {
-                val sock = device.createRfcommSocketToServiceRecord(sppUuid)
-                sock.connect()
+                var sock: BluetoothSocket
+                try {
+                    sock = device.createRfcommSocketToServiceRecord(sppUuid)
+                    sock.connect()
+                } catch (sdpFailure: Exception) {
+                    val fallbackSock = device.javaClass
+                        .getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+                        .invoke(device, 1) as BluetoothSocket
+                    fallbackSock.connect()
+                    sock = fallbackSock
+                }
                 socket = sock
                 outputStream = sock.outputStream
                 runOnUiThread {
@@ -204,12 +213,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendPacket() {
         val stream = outputStream ?: return
-        val trimer = if (lightsOn) 90 else defaultTrimer
+        val trimer = if (allLightsOn) 15 else defaultTrimer
+
+        val yawMagnitude = when {
+            currentYawFlag != 0 -> drivePower
+            currentPitchFlag != 0 -> drivePower
+            else -> 0
+        }
+
         val packet = buildPacket(
             pitchFlag = currentPitchFlag,
             pitch = if (currentPitchFlag != 0) drivePower else 0,
             yawFlag = currentYawFlag,
-            yaw = if (currentYawFlag != 0) drivePower else 0,
+            yaw = yawMagnitude,
             trimer = trimer
         )
         ioExecutor.execute {
